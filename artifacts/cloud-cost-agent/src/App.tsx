@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "@/components/Layout";
 
+import LandingPage from "@/pages/LandingPage";
 import Dashboard from "@/pages/Dashboard";
 import Resources from "@/pages/Resources";
 import Recommendations from "@/pages/Recommendations";
@@ -14,19 +15,57 @@ import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
 
-function Router() {
+function AppRoutes() {
   return (
-    <Layout>
-      <Switch>
-        <Route path="/" component={Dashboard} />
-        <Route path="/resources" component={Resources} />
-        <Route path="/recommendations" component={Recommendations} />
-        <Route path="/forecasts" component={Forecasts} />
-        <Route path="/alerts" component={Alerts} />
-        <Route path="/accounts" component={Accounts} />
-        <Route component={NotFound} />
-      </Switch>
-    </Layout>
+    <Switch>
+      {/* Landing page — standalone, no sidebar */}
+      <Route path="/landing" component={LandingPage} />
+
+      {/* App pages — wrapped in Layout with sidebar */}
+      <Route path="/">
+        {() => (
+          <Layout>
+            <Dashboard />
+          </Layout>
+        )}
+      </Route>
+      <Route path="/resources">
+        {() => (
+          <Layout>
+            <Resources />
+          </Layout>
+        )}
+      </Route>
+      <Route path="/recommendations">
+        {() => (
+          <Layout>
+            <Recommendations />
+          </Layout>
+        )}
+      </Route>
+      <Route path="/forecasts">
+        {() => (
+          <Layout>
+            <Forecasts />
+          </Layout>
+        )}
+      </Route>
+      <Route path="/alerts">
+        {() => (
+          <Layout>
+            <Alerts />
+          </Layout>
+        )}
+      </Route>
+      <Route path="/accounts">
+        {() => (
+          <Layout>
+            <Accounts />
+          </Layout>
+        )}
+      </Route>
+      <Route component={NotFound} />
+    </Switch>
   );
 }
 
@@ -35,7 +74,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
+          <AppRoutes />
         </WouterRouter>
         <Toaster />
       </TooltipProvider>

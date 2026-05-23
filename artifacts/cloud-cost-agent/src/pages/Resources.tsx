@@ -1,53 +1,82 @@
 import { useState, useMemo } from "react";
 import { useListResources, useGetResource, getGetResourceQueryKey } from "@workspace/api-client-react";
-import { 
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
-} from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { Search, Filter, Server, Cpu, MemoryStick, Activity, Tag, Network } from "lucide-react";
+import { Search, Filter, Server, Cpu, MemoryStick, Activity, Tag, Network, X, Database, Layers } from "lucide-react";
+import { motion } from "framer-motion";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Progress } from "@/components/ui/progress";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
+  Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+
+const PROVIDER_COLORS: Record<string, string> = {
+  aws: "#FF9900", gcp: "#4285F4", azure: "#0078D4",
+};
+
+function StatusLED({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    active: "led-green", idle: "led-orange", unused: "led-red", stopped: "",
+  };
+  const colors: Record<string, string> = {
+    active: "#39ff14", idle: "#ff8228", unused: "#ff4444", stopped: "#555",
+  };
+  return (
+    <div className="flex items-center gap-2">
+      <div
+        className={map[status] || ""}
+        style={!map[status] ? { width: 8, height: 8, borderRadius: "50%", background: "#444" } : { width: 8, height: 8, borderRadius: "50%" }}
+      />
+      <span
+        className="text-xs font-semibold uppercase"
+        style={{ fontFamily: "'JetBrains Mono', monospace", color: colors[status] || "#888", fontSize: "10px" }}
+      >
+        {status}
+      </span>
+    </div>
+  );
+}
+
+function NeonBar({ value, color }: { value: number; color: string }) {
+  return (
+    <div className="relative w-full h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.05)" }}>
+      <div
+        className="h-full rounded-full transition-all duration-700"
+        style={{
+          width: `${value}%`,
+          background: `linear-gradient(90deg, ${color}80, ${color})`,
+          boxShadow: `0 0 8px ${color}60`,
+        }}
+      />
+    </div>
+  );
+}
+
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.04 } },
+};
+const itemAnim = {
+  hidden: { opacity: 0, x: -20 },
+  show: { opacity: 1, x: 0, transition: { type: "spring", stiffness: 300, damping: 25 } },
+};
 
 export default function Resources() {
   const [search, setSearch] = useState("");
   const [providerFilter, setProviderFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
-
   const [selectedResourceId, setSelectedResourceId] = useState<number | null>(null);
 
   const { data: resources, isLoading } = useListResources();
-  
   const { data: resourceDetails, isLoading: isLoadingDetails } = useGetResource(
     selectedResourceId as number,
-    {
-      query: {
-        enabled: !!selectedResourceId,
-        queryKey: selectedResourceId ? getGetResourceQueryKey(selectedResourceId) : ["none"]
-      }
-    }
+    { query: { enabled: !!selectedResourceId, queryKey: selectedResourceId ? getGetResourceQueryKey(selectedResourceId) : ["none"] } }
   );
 
   const filteredResources = useMemo(() => {
     if (!resources) return [];
-    return resources.filter(res => {
+    return resources.filter((res) => {
       const matchesSearch = search ? res.name.toLowerCase().includes(search.toLowerCase()) || res.id.toString().includes(search) : true;
       const matchesProvider = providerFilter !== "all" ? res.provider === providerFilter : true;
       const matchesStatus = statusFilter !== "all" ? res.status === statusFilter : true;
@@ -56,279 +85,406 @@ export default function Resources() {
     });
   }, [resources, search, providerFilter, statusFilter, typeFilter]);
 
+  const totalActive = resources?.filter(r => r.status === "active").length || 0;
+  const totalIdle = resources?.filter(r => r.status === "idle").length || 0;
+  const totalUnused = resources?.filter(r => r.status === "unused").length || 0;
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold font-mono tracking-tight">Cloud Resources</h2>
-          <p className="text-sm text-muted-foreground font-mono">Inventory and utilization across all connected providers</p>
+      {/* Page Header */}
+      <div
+        className="relative rounded-2xl p-6 overflow-hidden"
+        style={{
+          background: "linear-gradient(135deg, rgba(124,58,237,0.06), rgba(124,58,237,0.03))",
+          border: "1px solid rgba(124,58,237,0.15)",
+        }}
+      >
+        {/* Rack art decorative */}
+        <div
+          className="absolute right-6 top-0 bottom-0 flex items-center gap-1 opacity-20"
+          aria-hidden="true"
+        >
+          {Array(8).fill(0).map((_, i) => (
+            <div
+              key={i}
+              className="w-3 rounded"
+              style={{
+                height: `${40 + Math.random() * 40}%`,
+                background: `hsl(${262 + i * 10}, 70%, 60%)`,
+                alignSelf: i % 2 === 0 ? "flex-end" : "flex-start",
+              }}
+            />
+          ))}
         </div>
-        <div className="flex items-center gap-2 font-mono text-sm">
-          <span className="text-muted-foreground">Total Resources:</span>
-          <Badge variant="secondary">{resources?.length || 0}</Badge>
+
+        <div className="relative z-10 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center"
+                style={{ background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.3)" }}
+              >
+                <Server className="w-5 h-5" style={{ color: "#7c3aed" }} />
+              </div>
+              <h2 className="text-2xl font-black" style={{ fontFamily: "'Exo 2', sans-serif", color: "#e8ecf5" }}>
+                Server Rack View
+              </h2>
+            </div>
+            <p className="text-sm" style={{ fontFamily: "'JetBrains Mono', monospace", color: "rgba(124,58,237,0.7)" }}>
+              3D infrastructure inventory · {resources?.length || 0} resources scanned
+            </p>
+          </div>
+
+          {/* Live stats */}
+          <div className="flex gap-3 flex-wrap">
+            {[
+              { label: "Active", count: totalActive, color: "#39ff14" },
+              { label: "Idle", count: totalIdle, color: "#ff8228" },
+              { label: "Unused", count: totalUnused, color: "#ff4444" },
+            ].map(({ label, count, color }) => (
+              <div
+                key={label}
+                className="px-4 py-2 rounded-xl"
+                style={{
+                  background: `${color}10`,
+                  border: `1px solid ${color}30`,
+                }}
+              >
+                <div className="text-xl font-black" style={{ fontFamily: "'Exo 2', sans-serif", color, textShadow: `0 0 15px ${color}60` }}>
+                  {count}
+                </div>
+                <div className="text-xs" style={{ fontFamily: "'JetBrains Mono', monospace", color: `${color}80` }}>
+                  {label}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      <Card>
-        <CardHeader className="pb-4">
-          <div className="flex flex-col lg:flex-row gap-4 lg:items-center justify-between">
-            <div className="relative w-full lg:max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Search by name or ID..." 
-                className="pl-9 font-mono"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-2 bg-muted/50 px-3 py-1.5 rounded-md border text-sm font-mono">
-                <Filter className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Filters</span>
-              </div>
-              
-              <Select value={providerFilter} onValueChange={setProviderFilter}>
-                <SelectTrigger className="w-[140px] font-mono h-9">
-                  <SelectValue placeholder="Provider" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Providers</SelectItem>
-                  <SelectItem value="aws">AWS</SelectItem>
-                  <SelectItem value="gcp">GCP</SelectItem>
-                  <SelectItem value="azure">Azure</SelectItem>
-                </SelectContent>
-              </Select>
+      {/* Filters */}
+      <div
+        className="flex flex-col lg:flex-row gap-4 p-4 rounded-2xl"
+        style={{
+          background: "rgba(15,20,40,0.7)",
+          border: "1px solid rgba(124,58,237,0.12)",
+          backdropFilter: "blur(16px)",
+        }}
+      >
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "rgba(140,150,180,0.4)" }} />
+          <input
+            type="text"
+            placeholder="Search by name or ID..."
+            className="w-full h-10 rounded-xl border pl-10 pr-4 text-sm focus:outline-none"
+            style={{
+              background: "rgba(10,14,30,0.8)",
+              border: "1px solid rgba(124,58,237,0.2)",
+              color: "#c8d0e8",
+              fontFamily: "'Inter', sans-serif",
+            }}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
 
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[140px] font-mono h-9">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="idle">Idle</SelectItem>
-                  <SelectItem value="unused">Unused</SelectItem>
-                  <SelectItem value="stopped">Stopped</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="w-[140px] font-mono h-9">
-                  <SelectValue placeholder="Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="ec2">EC2</SelectItem>
-                  <SelectItem value="rds">RDS</SelectItem>
-                  <SelectItem value="s3">S3</SelectItem>
-                  <SelectItem value="lambda">Lambda</SelectItem>
-                  <SelectItem value="gce">GCE</SelectItem>
-                  <SelectItem value="blob_storage">Blob Storage</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+        <div className="flex flex-wrap gap-2 items-center">
+          <div className="flex items-center gap-1.5 text-xs" style={{ color: "rgba(124,58,237,0.7)", fontFamily: "'JetBrains Mono', monospace" }}>
+            <Filter className="w-3.5 h-3.5" />
+            FILTER:
           </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-muted/50">
-              <TableRow>
-                <TableHead className="font-mono text-xs uppercase tracking-wider w-[250px]">Resource</TableHead>
-                <TableHead className="font-mono text-xs uppercase tracking-wider w-[100px]">Provider</TableHead>
-                <TableHead className="font-mono text-xs uppercase tracking-wider w-[120px]">Region</TableHead>
-                <TableHead className="font-mono text-xs uppercase tracking-wider w-[100px]">Status</TableHead>
-                <TableHead className="font-mono text-xs uppercase tracking-wider text-right w-[120px]">Monthly Cost</TableHead>
-                <TableHead className="font-mono text-xs uppercase tracking-wider w-[200px]">Utilization</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                Array(5).fill(0).map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell><Skeleton className="h-5 w-[200px]" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-[60px]" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-[80px]" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-[80px]" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-[80px] ml-auto" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-[150px]" /></TableCell>
-                  </TableRow>
-                ))
-              ) : filteredResources.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground font-mono">
-                    No resources found matching the current filters.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredResources.map((res) => (
-                  <TableRow 
-                    key={res.id} 
-                    className="group cursor-pointer hover:bg-muted/30"
-                    onClick={() => setSelectedResourceId(res.id)}
-                  >
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <span className="font-mono font-medium text-sm truncate max-w-[230px] group-hover:text-primary transition-colors">{res.name}</span>
-                        <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground">
-                          <span className="bg-muted px-1 rounded">{res.resourceType}</span>
-                          <span>ID: {res.id}</span>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="font-mono uppercase text-[10px] bg-background">
-                        {res.provider}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {res.region}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={`font-mono text-[10px] uppercase tracking-wider border ${
-                        res.status === 'idle' ? 'bg-chart-4/10 text-chart-4 border-chart-4/20' : 
-                        res.status === 'unused' ? 'bg-destructive/10 text-destructive border-destructive/20' : 
-                        res.status === 'stopped' ? 'bg-muted text-muted-foreground border-border' :
-                        'bg-primary/10 text-primary border-primary/20'
-                      }`}>
-                        {res.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <span className="font-mono font-bold text-sm text-foreground">
-                        {formatCurrency(res.monthlyCost)}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-2">
-                        <div className="flex items-center gap-2">
-                          <Cpu className="h-3 w-3 text-muted-foreground shrink-0" />
-                          <Progress 
-                            value={res.cpuUtilization} 
-                            className="h-1.5"
-                            indicatorClassName={res.cpuUtilization > 80 ? "bg-destructive" : res.cpuUtilization < 10 ? "bg-chart-4" : "bg-primary"}
-                          />
-                          <span className="font-mono text-[10px] w-8 text-right">{res.cpuUtilization}%</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <MemoryStick className="h-3 w-3 text-muted-foreground shrink-0" />
-                          <Progress 
-                            value={res.memoryUtilization} 
-                            className="h-1.5"
-                            indicatorClassName={res.memoryUtilization > 80 ? "bg-destructive" : res.memoryUtilization < 10 ? "bg-chart-4" : "bg-primary"}
-                          />
-                          <span className="font-mono text-[10px] w-8 text-right">{res.memoryUtilization}%</span>
-                        </div>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+          {[
+            { val: providerFilter, set: setProviderFilter, opts: [["all", "All Providers"], ["aws", "AWS"], ["gcp", "GCP"], ["azure", "Azure"]] },
+            { val: statusFilter, set: setStatusFilter, opts: [["all", "All Status"], ["active", "Active"], ["idle", "Idle"], ["unused", "Unused"], ["stopped", "Stopped"]] },
+            { val: typeFilter, set: setTypeFilter, opts: [["all", "All Types"], ["ec2", "EC2"], ["rds", "RDS"], ["s3", "S3"], ["lambda", "Lambda"], ["gce", "GCE"], ["blob_storage", "Blob Storage"]] },
+          ].map(({ val, set, opts }, idx) => (
+            <Select key={idx} value={val} onValueChange={set}>
+              <SelectTrigger
+                className="w-[140px] h-9 text-sm border-0 rounded-xl"
+                style={{
+                  background: "rgba(124,58,237,0.1)",
+                  border: "1px solid rgba(124,58,237,0.2)",
+                  color: "#c8d0e8",
+                  fontFamily: "'Inter', sans-serif",
+                }}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent style={{ background: "rgba(10,14,30,0.98)", border: "1px solid rgba(124,58,237,0.2)", borderRadius: "12px" }}>
+                {opts.map(([v, l]) => (
+                  <SelectItem key={v} value={v} style={{ fontFamily: "'Inter', sans-serif" }}>{l}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ))}
+        </div>
+      </div>
 
+      {/* Resource Cards */}
+      <motion.div
+        className="space-y-2"
+        variants={container}
+        initial="hidden"
+        animate="show"
+      >
+        {/* Header row */}
+        <div
+          className="grid items-center px-4 py-2 rounded-xl text-xs font-semibold uppercase tracking-widest"
+          style={{
+            gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1.5fr",
+            fontFamily: "'JetBrains Mono', monospace",
+            color: "rgba(124,58,237,0.5)",
+          }}
+        >
+          <span>Resource</span>
+          <span>Provider</span>
+          <span>Region</span>
+          <span>Status</span>
+          <span className="text-right">Monthly Cost</span>
+          <span className="pl-4">CPU / RAM</span>
+        </div>
+
+        {isLoading
+          ? Array(6).fill(0).map((_, i) => (
+              <div key={i} className="h-16 rounded-xl shimmer" />
+            ))
+          : filteredResources.length === 0
+          ? (
+            <div
+              className="text-center py-16 rounded-2xl"
+              style={{ background: "rgba(15,20,40,0.5)", border: "1px solid rgba(124,58,237,0.1)" }}
+            >
+              <Server className="w-10 h-10 mx-auto mb-3" style={{ color: "rgba(124,58,237,0.3)" }} />
+              <div className="text-base font-semibold" style={{ fontFamily: "'Exo 2', sans-serif", color: "rgba(180,190,220,0.5)" }}>
+                No resources found
+              </div>
+              <div className="text-sm" style={{ fontFamily: "'Inter', sans-serif", color: "rgba(140,150,180,0.35)" }}>
+                Try adjusting your filters
+              </div>
+            </div>
+          )
+          : filteredResources.map((res) => (
+            <motion.div
+              key={res.id}
+              variants={itemAnim}
+              className="grid items-center px-4 py-3.5 rounded-xl cursor-pointer transition-all"
+              style={{
+                gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1.5fr",
+                background: "rgba(15,20,40,0.7)",
+                border: "1px solid rgba(124,58,237,0.1)",
+                backdropFilter: "blur(12px)",
+              }}
+              whileHover={{
+                background: "rgba(124,58,237,0.08)",
+                borderColor: "rgba(124,58,237,0.25)",
+                x: 3,
+              }}
+              onClick={() => setSelectedResourceId(res.id)}
+            >
+              {/* Resource name */}
+              <div className="flex items-center gap-3 min-w-0">
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{
+                    background: `${PROVIDER_COLORS[res.provider] || "#7c3aed"}15`,
+                    border: `1px solid ${PROVIDER_COLORS[res.provider] || "#7c3aed"}30`,
+                  }}
+                >
+                  {res.resourceType === "s3" || res.resourceType === "blob_storage"
+                    ? <Database className="w-4 h-4" style={{ color: PROVIDER_COLORS[res.provider] || "#7c3aed" }} />
+                    : res.resourceType === "lambda"
+                    ? <Layers className="w-4 h-4" style={{ color: PROVIDER_COLORS[res.provider] || "#7c3aed" }} />
+                    : <Server className="w-4 h-4" style={{ color: PROVIDER_COLORS[res.provider] || "#7c3aed" }} />}
+                </div>
+                <div className="min-w-0">
+                  <div className="font-semibold text-sm truncate" style={{ fontFamily: "'Inter', sans-serif", color: "#c8d0e8" }}>
+                    {res.name}
+                  </div>
+                  <div className="text-xs" style={{ fontFamily: "'JetBrains Mono', monospace", color: "rgba(140,150,180,0.45)", fontSize: "10px" }}>
+                    {res.resourceType.toUpperCase()} · ID:{res.id}
+                  </div>
+                </div>
+              </div>
+
+              {/* Provider */}
+              <div
+                className="inline-flex items-center px-2 py-1 rounded-lg text-xs font-bold uppercase w-fit"
+                style={{
+                  background: `${PROVIDER_COLORS[res.provider] || "#7c3aed"}15`,
+                  color: PROVIDER_COLORS[res.provider] || "#7c3aed",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: "10px",
+                }}
+              >
+                {res.provider}
+              </div>
+
+              {/* Region */}
+              <div className="text-xs" style={{ fontFamily: "'JetBrains Mono', monospace", color: "rgba(140,150,180,0.5)" }}>
+                {res.region}
+              </div>
+
+              {/* Status */}
+              <StatusLED status={res.status} />
+
+              {/* Cost */}
+              <div className="text-right">
+                <span className="font-black text-sm" style={{ fontFamily: "'JetBrains Mono', monospace", color: "#e8ecf5" }}>
+                  {formatCurrency(res.monthlyCost)}
+                </span>
+              </div>
+
+              {/* Utilization bars */}
+              <div className="pl-4 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <Cpu className="w-3 h-3 flex-shrink-0" style={{ color: "rgba(140,150,180,0.35)" }} />
+                  <NeonBar
+                    value={res.cpuUtilization}
+                    color={res.cpuUtilization > 80 ? "#ff4444" : res.cpuUtilization < 15 ? "#ff8228" : "#00f5ff"}
+                  />
+                  <span className="text-xs w-7 text-right" style={{ fontFamily: "'JetBrains Mono', monospace", color: "rgba(140,150,180,0.5)", fontSize: "10px" }}>
+                    {res.cpuUtilization}%
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <MemoryStick className="w-3 h-3 flex-shrink-0" style={{ color: "rgba(140,150,180,0.35)" }} />
+                  <NeonBar
+                    value={res.memoryUtilization}
+                    color={res.memoryUtilization > 80 ? "#ff4444" : res.memoryUtilization < 15 ? "#ff8228" : "#7c3aed"}
+                  />
+                  <span className="text-xs w-7 text-right" style={{ fontFamily: "'JetBrains Mono', monospace", color: "rgba(140,150,180,0.5)", fontSize: "10px" }}>
+                    {res.memoryUtilization}%
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+      </motion.div>
+
+      {/* Detail Sheet */}
       <Sheet open={!!selectedResourceId} onOpenChange={(open) => !open && setSelectedResourceId(null)}>
-        <SheetContent className="w-[400px] sm:w-[540px] border-l-border bg-background sm:max-w-md overflow-y-auto">
+        <SheetContent
+          className="w-[420px] sm:w-[520px] sm:max-w-lg overflow-y-auto border-0"
+          style={{
+            background: "linear-gradient(180deg, rgba(8,12,28,0.99) 0%, rgba(5,8,20,0.99) 100%)",
+            borderLeft: "1px solid rgba(124,58,237,0.2)",
+            backdropFilter: "blur(30px)",
+          }}
+        >
           {isLoadingDetails || !resourceDetails ? (
-            <div className="space-y-6 py-6">
-              <Skeleton className="h-8 w-3/4" />
-              <Skeleton className="h-4 w-1/2" />
-              <Skeleton className="h-[200px] w-full mt-8" />
-              <Skeleton className="h-[100px] w-full" />
+            <div className="space-y-4 py-8">
+              <div className="h-8 w-3/4 rounded-xl shimmer" />
+              <div className="h-4 w-1/2 rounded shimmer" />
+              <div className="h-48 w-full rounded-xl shimmer mt-8" />
             </div>
           ) : (
             <>
-              <SheetHeader className="pb-6 border-b border-border">
-                <div className="flex items-center gap-2 mb-2">
-                  <Badge variant="outline" className={`font-mono text-[10px] uppercase tracking-wider border ${
-                    resourceDetails.status === 'idle' ? 'bg-chart-4/10 text-chart-4 border-chart-4/20' : 
-                    resourceDetails.status === 'unused' ? 'bg-destructive/10 text-destructive border-destructive/20' : 
-                    resourceDetails.status === 'stopped' ? 'bg-muted text-muted-foreground border-border' :
-                    'bg-primary/10 text-primary border-primary/20'
-                  }`}>
-                    {resourceDetails.status}
-                  </Badge>
-                  <Badge variant="outline" className="font-mono uppercase text-[10px] bg-background">
+              <SheetHeader className="pb-6" style={{ borderBottom: "1px solid rgba(124,58,237,0.12)" }}>
+                <div className="flex items-center gap-2 mb-3">
+                  <StatusLED status={resourceDetails.status} />
+                  <span
+                    className="text-xs px-2 py-0.5 rounded-lg font-bold uppercase ml-1"
+                    style={{
+                      background: `${PROVIDER_COLORS[resourceDetails.provider] || "#7c3aed"}15`,
+                      color: PROVIDER_COLORS[resourceDetails.provider] || "#7c3aed",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: "10px",
+                    }}
+                  >
                     {resourceDetails.provider}
-                  </Badge>
-                  <span className="text-[10px] font-mono text-muted-foreground ml-auto">
-                    ID: {resourceDetails.id}
+                  </span>
+                  <span className="text-xs ml-auto" style={{ fontFamily: "'JetBrains Mono', monospace", color: "rgba(140,150,180,0.35)" }}>
+                    ID:{resourceDetails.id}
                   </span>
                 </div>
-                <SheetTitle className="text-xl font-mono text-primary break-all leading-tight">
+                <SheetTitle
+                  className="text-xl font-black break-all leading-tight"
+                  style={{ fontFamily: "'Exo 2', sans-serif", color: "#e8ecf5" }}
+                >
                   {resourceDetails.name}
                 </SheetTitle>
-                <SheetDescription className="font-mono text-xs flex items-center gap-2 mt-2">
-                  <Server className="h-3 w-3" />
+                <SheetDescription className="flex items-center gap-2 mt-1 text-xs" style={{ fontFamily: "'JetBrains Mono', monospace", color: "rgba(124,58,237,0.6)" }}>
+                  <Server className="w-3 h-3" />
                   {resourceDetails.resourceType.toUpperCase()}
-                  <span className="mx-1">•</span>
-                  <Network className="h-3 w-3" />
+                  <span className="mx-1">·</span>
+                  <Network className="w-3 h-3" />
                   {resourceDetails.region}
                 </SheetDescription>
               </SheetHeader>
-              
-              <div className="py-6 space-y-8">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1 p-3 border border-border rounded-md bg-card">
-                    <p className="text-[10px] font-mono uppercase text-muted-foreground">Monthly Cost</p>
-                    <p className="text-xl font-bold font-mono tracking-tight text-foreground">
-                      {formatCurrency(resourceDetails.monthlyCost)}
-                    </p>
-                  </div>
-                  <div className="space-y-1 p-3 border border-border rounded-md bg-card">
-                    <p className="text-[10px] font-mono uppercase text-muted-foreground">Last Active</p>
-                    <p className="text-sm font-bold font-mono tracking-tight text-foreground mt-1 flex items-center gap-1">
-                      <Activity className="h-4 w-4 text-chart-4" />
-                      {formatDate(resourceDetails.lastActive)}
-                    </p>
-                  </div>
+
+              <div className="py-6 space-y-6">
+                {/* Cost & Activity */}
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: "Monthly Cost", value: formatCurrency(resourceDetails.monthlyCost), color: "#00f5ff" },
+                    { label: "Last Active", value: formatDate(resourceDetails.lastActive), color: "#ff8228", small: true },
+                  ].map(({ label, value, color, small }) => (
+                    <div
+                      key={label}
+                      className="p-4 rounded-xl"
+                      style={{ background: `${color}08`, border: `1px solid ${color}20` }}
+                    >
+                      <div className="text-xs mb-1 uppercase tracking-widest" style={{ fontFamily: "'JetBrains Mono', monospace", color: `${color}70`, fontSize: "9px" }}>
+                        {label}
+                      </div>
+                      <div
+                        className={`font-black ${small ? "text-base" : "text-xl"}`}
+                        style={{ fontFamily: "'Exo 2', sans-serif", color: "#e8ecf5" }}
+                      >
+                        {value}
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
-                <div className="space-y-4">
-                  <h4 className="text-sm font-bold font-mono uppercase tracking-wider border-b border-border pb-2">
+                {/* Utilization */}
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-widest mb-3 pb-2" style={{ fontFamily: "'JetBrains Mono', monospace", color: "rgba(124,58,237,0.6)", borderBottom: "1px solid rgba(124,58,237,0.1)" }}>
                     Utilization Metrics
-                  </h4>
-                  <div className="space-y-4 p-4 border border-border rounded-md bg-card/50">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-xs font-mono">
-                        <span className="flex items-center gap-1.5"><Cpu className="h-3.5 w-3.5 text-muted-foreground" /> CPU</span>
-                        <span className="font-bold">{resourceDetails.cpuUtilization}%</span>
+                  </div>
+                  <div className="space-y-4 p-4 rounded-xl" style={{ background: "rgba(124,58,237,0.05)", border: "1px solid rgba(124,58,237,0.1)" }}>
+                    {[
+                      { icon: Cpu, label: "CPU", val: resourceDetails.cpuUtilization },
+                      { icon: MemoryStick, label: "Memory", val: resourceDetails.memoryUtilization },
+                    ].map(({ icon: Icon, label, val }) => (
+                      <div key={label} className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="flex items-center gap-1.5 text-xs" style={{ fontFamily: "'JetBrains Mono', monospace", color: "rgba(140,150,180,0.6)" }}>
+                            <Icon className="w-3.5 h-3.5" />
+                            {label}
+                          </span>
+                          <span className="text-sm font-bold" style={{ fontFamily: "'JetBrains Mono', monospace", color: val > 80 ? "#ff4444" : val < 15 ? "#ff8228" : "#00f5ff" }}>
+                            {val}%
+                          </span>
+                        </div>
+                        <NeonBar value={val} color={val > 80 ? "#ff4444" : val < 15 ? "#ff8228" : "#00f5ff"} />
                       </div>
-                      <Progress 
-                        value={resourceDetails.cpuUtilization} 
-                        className="h-2"
-                        indicatorClassName={resourceDetails.cpuUtilization > 80 ? "bg-destructive" : resourceDetails.cpuUtilization < 10 ? "bg-chart-4" : "bg-primary"}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-xs font-mono">
-                        <span className="flex items-center gap-1.5"><MemoryStick className="h-3.5 w-3.5 text-muted-foreground" /> Memory</span>
-                        <span className="font-bold">{resourceDetails.memoryUtilization}%</span>
-                      </div>
-                      <Progress 
-                        value={resourceDetails.memoryUtilization} 
-                        className="h-2"
-                        indicatorClassName={resourceDetails.memoryUtilization > 80 ? "bg-destructive" : resourceDetails.memoryUtilization < 10 ? "bg-chart-4" : "bg-primary"}
-                      />
-                    </div>
+                    ))}
                   </div>
                 </div>
 
+                {/* Tags */}
                 {resourceDetails.tags && (
-                  <div className="space-y-3">
-                    <h4 className="text-sm font-bold font-mono uppercase tracking-wider border-b border-border pb-2 flex items-center gap-2">
-                      <Tag className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-widest mb-3 pb-2 flex items-center gap-2" style={{ fontFamily: "'JetBrains Mono', monospace", color: "rgba(124,58,237,0.6)", borderBottom: "1px solid rgba(124,58,237,0.1)" }}>
+                      <Tag className="w-3 h-3" />
                       Resource Tags
-                    </h4>
+                    </div>
                     <div className="flex flex-wrap gap-2">
-                      {resourceDetails.tags.split(',').map((tag, idx) => {
-                        const [key, val] = tag.split(':');
+                      {resourceDetails.tags.split(",").map((tag, idx) => {
+                        const [key, val] = tag.split(":");
                         return (
-                          <div key={idx} className="flex border border-border rounded-md overflow-hidden text-xs font-mono bg-background">
-                            <span className="px-2 py-1 bg-muted border-r border-border text-muted-foreground">{key?.trim()}</span>
-                            <span className="px-2 py-1 font-medium">{val?.trim() || 'N/A'}</span>
+                          <div
+                            key={idx}
+                            className="flex rounded-lg overflow-hidden text-xs"
+                            style={{ fontFamily: "'JetBrains Mono', monospace", border: "1px solid rgba(124,58,237,0.2)" }}
+                          >
+                            <span className="px-2 py-1" style={{ background: "rgba(124,58,237,0.15)", color: "rgba(167,100,255,0.8)" }}>
+                              {key?.trim()}
+                            </span>
+                            <span className="px-2 py-1" style={{ background: "rgba(124,58,237,0.06)", color: "#c8d0e8" }}>
+                              {val?.trim() || "N/A"}
+                            </span>
                           </div>
                         );
                       })}

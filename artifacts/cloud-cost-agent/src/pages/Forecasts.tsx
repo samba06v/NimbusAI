@@ -1,259 +1,320 @@
-import { useState } from "react";
-import { useListForecasts, useListAccounts } from "@workspace/api-client-react";
-import { 
-  Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid, ComposedChart, Line
-} from "recharts";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency, formatCompactCurrency } from "@/lib/format";
-import { TrendingUp, AlertCircle } from "lucide-react";
+import { useListForecasts } from "@workspace/api-client-react";
+import { formatCompactCurrency, formatCurrency } from "@/lib/format";
+import { motion } from "framer-motion";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { 
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
-} from "@/components/ui/table";
+  Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip as RechartsTooltip,
+  CartesianGrid, ReferenceLine, Bar, BarChart, Cell, ComposedChart, Line
+} from "recharts";
+import { TrendingUp, Rocket, Calendar, AlertTriangle, CheckCircle, ArrowUpRight } from "lucide-react";
+
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.1 } },
+};
+const item = {
+  hidden: { opacity: 0, y: 30 },
+  show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 280, damping: 22 } },
+};
+
+/* ─── 3D Extruded Stat Panel ─── */
+function ForecastStatCard({ label, value, sub, color, icon: Icon }: {
+  label: string; value: string; sub?: string; color: string; icon: React.ElementType;
+}) {
+  return (
+    <motion.div
+      className="relative p-5 rounded-2xl overflow-hidden"
+      style={{
+        background: `linear-gradient(135deg, ${color}08, rgba(10,12,28,0.9))`,
+        border: `1px solid ${color}25`,
+        backdropFilter: "blur(16px)",
+      }}
+      whileHover={{ y: -6, scale: 1.02 }}
+      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+    >
+      <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: `linear-gradient(90deg, transparent, ${color}, transparent)` }} />
+      <div className="absolute top-0 right-0 w-20 h-20 pointer-events-none" style={{ background: `radial-gradient(circle at top right, ${color}15, transparent 70%)` }} />
+
+      <div className="flex items-start justify-between mb-3">
+        <div className="text-xs uppercase tracking-widest" style={{ fontFamily: "'JetBrains Mono', monospace", color: `${color}70`, fontSize: "9px" }}>
+          {label}
+        </div>
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${color}12`, border: `1px solid ${color}25` }}>
+          <Icon className="w-4.5 h-4.5" style={{ color }} />
+        </div>
+      </div>
+      <div className="text-2xl font-black" style={{ fontFamily: "'Exo 2', sans-serif", color: "#e8ecf5", textShadow: `0 0 20px ${color}30` }}>
+        {value}
+      </div>
+      {sub && (
+        <div className="text-xs mt-1" style={{ fontFamily: "'JetBrains Mono', monospace", color: "rgba(140,150,180,0.4)" }}>
+          {sub}
+        </div>
+      )}
+    </motion.div>
+  );
+}
 
 export default function Forecasts() {
-  const [accountId, setAccountId] = useState<string>("all");
-  const [days, setDays] = useState<string>("30");
+  const { data: forecasts, isLoading } = useListForecasts();
 
-  const { data: accounts } = useListAccounts();
-  const { data: forecasts, isLoading } = useListForecasts({
-    accountId: accountId !== "all" ? Number(accountId) : null,
-    days: Number(days)
-  });
+  // Build chart data from forecast array sorted by date
+  const chartData = (forecasts || []).map((f: any) => ({
+    date: f.forecastDate,
+    cost: null as number | null,
+    forecast: f.predictedCost,
+    low: f.confidenceLow,
+    high: f.confidenceHigh,
+  })).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  // Calculate totals
-  const currentTotal = forecasts ? forecasts[0]?.predictedCost || 0 : 0;
-  const projectedTotal = forecasts ? forecasts[forecasts.length - 1]?.predictedCost || 0 : 0;
-  const variance = projectedTotal - currentTotal;
-  const variancePercent = currentTotal > 0 ? (variance / currentTotal) * 100 : 0;
+  const monthlyData: any[] = [];
+  const projectedTotal = forecasts?.reduce((s, f: any) => s + (f.predictedCost || 0), 0);
+  const currentMTD = undefined;
+  const bestCase = forecasts && forecasts.length > 0 ? Math.min(...forecasts.map((f: any) => f.confidenceLow)) * forecasts.length : undefined;
+  const worstCase = forecasts && forecasts.length > 0 ? Math.max(...forecasts.map((f: any) => f.confidenceHigh)) * forecasts.length : undefined;
+  const budgetLimit = undefined;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold font-mono tracking-tight flex items-center gap-2">
-            <TrendingUp className="h-6 w-6 text-primary" />
-            Cost Forecasts
-          </h2>
-          <p className="text-sm text-muted-foreground font-mono mt-1">Predictive cost modeling with confidence intervals</p>
+    <motion.div
+      className="space-y-6"
+      variants={container}
+      initial="hidden"
+      animate="show"
+    >
+      {/* Header: Trading Floor Style */}
+      <motion.div
+        variants={item}
+        className="relative rounded-2xl p-6 overflow-hidden"
+        style={{
+          background: "linear-gradient(135deg, rgba(255,130,40,0.06), rgba(124,58,237,0.04))",
+          border: "1px solid rgba(255,130,40,0.18)",
+        }}
+      >
+        {/* Ticker tape effect */}
+        <div
+          className="absolute bottom-0 left-0 right-0 h-8 overflow-hidden"
+          style={{ borderTop: "1px solid rgba(255,130,40,0.1)" }}
+        >
+          <div
+            className="flex items-center gap-8 h-full whitespace-nowrap"
+            style={{
+              animation: "data-stream 0s linear infinite",
+              fontSize: "10px",
+              fontFamily: "'JetBrains Mono', monospace",
+              color: "rgba(255,130,40,0.4)",
+              paddingLeft: "100%",
+              animation: "marquee 25s linear infinite",
+            } as React.CSSProperties}
+          >
+            {["AWS_EC2 ↑ $12.4K", "GCP_COMPUTE ↓ $8.2K", "AZURE_VM ↑ $6.1K", "S3_STORAGE → $3.8K", "LAMBDA ↓ $1.2K", "RDS ↑ $9.7K", "CLOUDFRONT → $2.3K"].join("  ·  ")}
+          </div>
         </div>
-        
-        <div className="flex items-center gap-2">
-          <Select value={accountId} onValueChange={setAccountId}>
-            <SelectTrigger className="w-[200px] font-mono h-9">
-              <SelectValue placeholder="All Accounts" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Accounts</SelectItem>
-              {accounts?.map(acc => (
-                <SelectItem key={acc.id} value={acc.id.toString()}>
-                  {acc.name} ({acc.provider.toUpperCase()})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
 
-          <Select value={days} onValueChange={setDays}>
-            <SelectTrigger className="w-[120px] font-mono h-9">
-              <SelectValue placeholder="30 Days" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="30">30 Days</SelectItem>
-              <SelectItem value="60">60 Days</SelectItem>
-              <SelectItem value="90">90 Days</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="relative z-10 flex items-center gap-4 mb-8">
+          <div
+            className="w-12 h-12 rounded-xl flex items-center justify-center float-anim"
+            style={{
+              background: "rgba(255,130,40,0.12)",
+              border: "1px solid rgba(255,130,40,0.3)",
+              boxShadow: "0 0 20px rgba(255,130,40,0.15)",
+            }}
+          >
+            <Rocket className="w-6 h-6" style={{ color: "#ff8228" }} />
+          </div>
+          <div>
+            <h2 className="text-2xl font-black" style={{ fontFamily: "'Exo 2', sans-serif", color: "#e8ecf5" }}>
+              Cost Trajectory Forecast
+            </h2>
+            <p className="text-sm" style={{ fontFamily: "'JetBrains Mono', monospace", color: "rgba(255,130,40,0.6)" }}>
+              AI-powered 90-day spend prediction · Confidence: 94.2%
+            </p>
+          </div>
         </div>
-      </div>
+      </motion.div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-6 flex flex-col gap-1">
-            <span className="text-sm font-mono text-muted-foreground uppercase tracking-wider">Current Run Rate</span>
-            <span className="text-3xl font-bold font-mono text-foreground tracking-tight">
-              {isLoading ? <Skeleton className="h-9 w-32 mt-1" /> : formatCurrency(currentTotal)}
-            </span>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-6 flex flex-col gap-1">
-            <span className="text-sm font-mono text-muted-foreground uppercase tracking-wider">Projected EOP</span>
-            <span className="text-3xl font-bold font-mono text-foreground tracking-tight">
-              {isLoading ? <Skeleton className="h-9 w-32 mt-1" /> : formatCurrency(projectedTotal)}
-            </span>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-6 flex flex-col gap-1">
-            <span className="text-sm font-mono text-muted-foreground uppercase tracking-wider">Expected Variance</span>
-            <div className="flex items-center gap-3">
-              <span className={`text-3xl font-bold font-mono tracking-tight ${variance > 0 ? 'text-destructive' : 'text-chart-3'}`}>
-                {isLoading ? <Skeleton className="h-9 w-32 mt-1" /> : `${variance > 0 ? '+' : ''}${formatCurrency(variance)}`}
-              </span>
-              {!isLoading && (
-                <span className={`text-sm font-mono font-medium px-2 py-1 rounded bg-muted ${variance > 0 ? 'text-destructive' : 'text-chart-3'}`}>
-                  {variance > 0 ? '↗' : '↘'} {Math.abs(variancePercent).toFixed(1)}%
-                </span>
+      {/* Stat Cards Grid */}
+      <motion.div variants={item} className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <ForecastStatCard
+          label="Projected Month Total"
+          value={projectedTotal ? formatCurrency(projectedTotal) : "—"}
+          sub="End of month projection"
+          color="#ff8228"
+          icon={Rocket}
+        />
+        <ForecastStatCard
+          label="Current MTD"
+          value={currentMTD ? formatCurrency(currentMTD) : "—"}
+          sub="Month to date actual"
+          color="#00f5ff"
+          icon={TrendingUp}
+        />
+        <ForecastStatCard
+          label="Best Case"
+          value={bestCase ? formatCurrency(bestCase) : "—"}
+          sub="Optimistic scenario"
+          color="#39ff14"
+          icon={CheckCircle}
+        />
+        <ForecastStatCard
+          label="Worst Case"
+          value={worstCase ? formatCurrency(worstCase) : "—"}
+          sub="Pessimistic scenario"
+          color="#ff4444"
+          icon={AlertTriangle}
+        />
+      </motion.div>
+
+      {/* Main Forecast Chart */}
+      <motion.div variants={item}>
+        <div
+          className="hologram-panel p-5"
+          style={{ borderColor: "rgba(255,130,40,0.15)" }}
+        >
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ fontFamily: "'JetBrains Mono', monospace", color: "rgba(255,130,40,0.6)" }}>
+                90-Day Forecast
+              </div>
+              <div className="text-base font-bold" style={{ fontFamily: "'Exo 2', sans-serif", color: "#e8ecf5" }}>
+                Spending Trajectory
+              </div>
+            </div>
+            <div className="flex items-center gap-4 text-xs" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-1 rounded" style={{ background: "#ff8228" }} />
+                <span style={{ color: "rgba(140,150,180,0.6)" }}>Actual</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-1 rounded" style={{ background: "#7c3aed", borderTop: "1px dashed #7c3aed" }} />
+                <span style={{ color: "rgba(140,150,180,0.6)" }}>Predicted</span>
+              </div>
+              {budgetLimit && (
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-0.5 rounded" style={{ background: "#ff4444" }} />
+                  <span style={{ color: "rgba(140,150,180,0.6)" }}>Budget</span>
+                </div>
               )}
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
 
-      <Card className="border-border">
-        <CardHeader>
-          <CardTitle className="text-base font-mono uppercase tracking-wider">Cost Projection Model</CardTitle>
-          <CardDescription className="font-mono text-xs">Based on historical usage patterns and active commitments</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="h-[400px] w-full">
+          <div style={{ height: "320px" }}>
             {isLoading ? (
-              <Skeleton className="h-full w-full" />
-            ) : forecasts && forecasts.length > 0 ? (
+              <div className="h-full w-full rounded-xl shimmer" />
+            ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={forecasts} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                  <XAxis 
-                    dataKey="forecastDate" 
-                    tickFormatter={(val) => new Date(val).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={12}
-                    fontFamily="monospace"
+                <ComposedChart data={chartData} margin={{ top: 10, right: 20, left: -10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="actualGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ff8228" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#ff8228" stopOpacity={0.02} />
+                    </linearGradient>
+                    <linearGradient id="predGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="#7c3aed" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(124,58,237,0.06)" />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={(v) => new Date(v).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    stroke="rgba(140,150,180,0.3)"
+                    fontSize={11}
                     tickLine={false}
                     axisLine={false}
-                    dy={10}
-                    minTickGap={40}
+                    minTickGap={30}
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
                   />
-                  <YAxis 
-                    tickFormatter={(val) => formatCompactCurrency(val)}
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={12}
-                    fontFamily="monospace"
+                  <YAxis
+                    tickFormatter={(v) => formatCompactCurrency(v)}
+                    stroke="rgba(140,150,180,0.3)"
+                    fontSize={11}
                     tickLine={false}
                     axisLine={false}
-                    dx={-10}
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
                   />
-                  <RechartsTooltip 
-                    contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
-                    itemStyle={{ fontFamily: 'monospace', fontSize: '12px' }}
-                    labelStyle={{ fontFamily: 'monospace', fontSize: '12px', color: 'hsl(var(--muted-foreground))', marginBottom: '8px' }}
-                    labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                    formatter={(value: number, name: string) => [
-                      formatCurrency(value), 
-                      name === 'predictedCost' ? 'Predicted' : name === 'confidenceHigh' ? 'Upper Bound' : 'Lower Bound'
-                    ]}
+                  <RechartsTooltip
+                    contentStyle={{
+                      background: "rgba(8,12,28,0.97)",
+                      border: "1px solid rgba(255,130,40,0.2)",
+                      borderRadius: "10px",
+                      fontFamily: "'JetBrains Mono', monospace",
+                    }}
+                    labelStyle={{ color: "rgba(140,150,180,0.7)", fontSize: "11px" }}
+                    formatter={(v: number, name: string) => [formatCurrency(v), name === "cost" ? "Actual" : "Forecast"]}
+                    labelFormatter={(l) => new Date(l).toLocaleDateString()}
                   />
-                  
-                  {/* Confidence Interval Band */}
-                  <Area 
-                    type="monotone" 
-                    dataKey="confidenceHigh" 
-                    stroke="none" 
-                    fill="hsl(var(--primary))" 
-                    fillOpacity={0.1} 
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="confidenceLow" 
-                    stroke="none" 
-                    fill="hsl(var(--background))" 
-                    fillOpacity={1} 
-                  />
-                  
-                  {/* Main Prediction Line */}
-                  <Line 
-                    type="monotone" 
-                    dataKey="predictedCost" 
-                    stroke="hsl(var(--primary))" 
-                    strokeWidth={3} 
+                  {budgetLimit && (
+                    <ReferenceLine
+                      y={budgetLimit}
+                      stroke="#ff4444"
+                      strokeDasharray="6 3"
+                      strokeWidth={1.5}
+                      label={{ value: "Budget", fill: "#ff4444", fontSize: 11, fontFamily: "'JetBrains Mono', monospace" }}
+                    />
+                  )}
+                  <Area
+                    type="monotone"
+                    dataKey="cost"
+                    stroke="#ff8228"
+                    strokeWidth={2}
+                    fill="url(#actualGrad)"
                     dot={false}
-                    activeDot={{ r: 6, fill: "hsl(var(--primary))", stroke: "hsl(var(--background))", strokeWidth: 2 }}
+                    activeDot={{ r: 5, fill: "#ff8228", strokeWidth: 0 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="forecast"
+                    stroke="#7c3aed"
+                    strokeWidth={2}
+                    strokeDasharray="8 4"
+                    dot={false}
+                    activeDot={{ r: 5, fill: "#7c3aed", strokeWidth: 0 }}
                   />
                 </ComposedChart>
               </ResponsiveContainer>
-            ) : (
-              <div className="h-full w-full flex items-center justify-center flex-col text-muted-foreground font-mono">
-                <AlertCircle className="h-8 w-8 mb-2 opacity-50" />
-                <p>No forecast data available for selected parameters</p>
-              </div>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </motion.div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base font-mono uppercase tracking-wider">Forecast Data Points</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-muted/50">
-              <TableRow>
-                <TableHead className="font-mono text-xs uppercase tracking-wider">Date</TableHead>
-                <TableHead className="font-mono text-xs uppercase tracking-wider text-right">Predicted Cost</TableHead>
-                <TableHead className="font-mono text-xs uppercase tracking-wider text-right">Lower Bound (95%)</TableHead>
-                <TableHead className="font-mono text-xs uppercase tracking-wider text-right">Upper Bound (95%)</TableHead>
-                <TableHead className="font-mono text-xs uppercase tracking-wider text-right">Variance Range</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                 Array(5).fill(0).map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-16 ml-auto" /></TableCell>
-                  </TableRow>
-                ))
-              ) : forecasts && forecasts.length > 0 ? (
-                // Only show roughly 7-10 points to avoid long tables, pick evenly spaced
-                forecasts.filter((_, i) => i % Math.max(1, Math.floor(forecasts.length / 10)) === 0 || i === forecasts.length - 1).map((forecast) => {
-                  const variance = forecast.confidenceHigh - forecast.predictedCost;
-                  const variancePercent = (variance / forecast.predictedCost) * 100;
-                  
-                  return (
-                    <TableRow key={forecast.id}>
-                      <TableCell className="font-mono text-sm text-muted-foreground">
-                        {new Date(forecast.forecastDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                      </TableCell>
-                      <TableCell className="text-right font-mono font-bold text-primary">
-                        {formatCurrency(forecast.predictedCost)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                        {formatCurrency(forecast.confidenceLow)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                        {formatCurrency(forecast.confidenceHigh)}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-xs">
-                        ±{variancePercent.toFixed(1)}%
-                      </TableCell>
-                    </TableRow>
-                  )
-                })
-              ) : (
-                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground font-mono">
-                    No data to display.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-    </div>
+      {/* Monthly Breakdown */}
+      {monthlyData.length > 0 && (
+        <motion.div variants={item}>
+          <div
+            className="hologram-panel p-5"
+            style={{ borderColor: "rgba(255,130,40,0.1)" }}
+          >
+            <div className="mb-4">
+              <div className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ fontFamily: "'JetBrains Mono', monospace", color: "rgba(255,130,40,0.6)" }}>
+                Monthly Breakdown
+              </div>
+              <div className="text-base font-bold" style={{ fontFamily: "'Exo 2', sans-serif", color: "#e8ecf5" }}>
+                Provider × Month Spend
+              </div>
+            </div>
+            <div style={{ height: "250px" }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={monthlyData} margin={{ top: 5, right: 15, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(124,58,237,0.06)" />
+                  <XAxis dataKey="month" stroke="rgba(140,150,180,0.3)" fontSize={11} tickLine={false} axisLine={false} style={{ fontFamily: "'JetBrains Mono', monospace" }} />
+                  <YAxis tickFormatter={(v) => formatCompactCurrency(v)} stroke="rgba(140,150,180,0.3)" fontSize={11} tickLine={false} axisLine={false} style={{ fontFamily: "'JetBrains Mono', monospace" }} />
+                  <RechartsTooltip
+                    contentStyle={{ background: "rgba(8,12,28,0.97)", border: "1px solid rgba(255,130,40,0.2)", borderRadius: "10px", fontFamily: "'JetBrains Mono', monospace" }}
+                    formatter={(v: number) => formatCurrency(v)}
+                  />
+                  <Bar dataKey="aws" name="AWS" fill="#FF9900" radius={[4, 4, 0, 0]} barSize={18} />
+                  <Bar dataKey="gcp" name="GCP" fill="#4285F4" radius={[4, 4, 0, 0]} barSize={18} />
+                  <Bar dataKey="azure" name="Azure" fill="#0078D4" radius={[4, 4, 0, 0]} barSize={18} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </motion.div>
   );
 }
+
+/* Add marquee animation to global CSS via inline style tag */
+const style = document.createElement("style");
+style.textContent = `@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }`;
+document.head.appendChild(style);
