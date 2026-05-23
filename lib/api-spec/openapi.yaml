@@ -1,22 +1,32 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Cloud Cost Optimization Agent API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: accounts
+    description: Cloud account management
+  - name: resources
+    description: Cloud resource monitoring
+  - name: recommendations
+    description: Cost optimization recommendations
+  - name: forecasts
+    description: Cost forecasting
+  - name: alerts
+    description: Cost alerts
+  - name: dashboard
+    description: Dashboard summary data
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +34,351 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /accounts:
+    get:
+      operationId: listAccounts
+      tags: [accounts]
+      summary: List all cloud accounts
+      responses:
+        "200":
+          description: List of cloud accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CloudAccount"
+    post:
+      operationId: createAccount
+      tags: [accounts]
+      summary: Add a cloud account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CloudAccountInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CloudAccount"
+
+  /accounts/{id}:
+    get:
+      operationId: getAccount
+      tags: [accounts]
+      summary: Get a cloud account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Cloud account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CloudAccount"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteAccount
+      tags: [accounts]
+      summary: Remove a cloud account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /resources:
+    get:
+      operationId: listResources
+      tags: [resources]
+      summary: List cloud resources
+      parameters:
+        - name: accountId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: provider
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: status
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: resourceType
+          in: query
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: List of resources
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CloudResource"
+
+  /resources/{id}:
+    get:
+      operationId: getResource
+      tags: [resources]
+      summary: Get a cloud resource
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Cloud resource
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CloudResource"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateResource
+      tags: [resources]
+      summary: Update resource metadata
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CloudResourceUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CloudResource"
+
+  /recommendations:
+    get:
+      operationId: listRecommendations
+      tags: [recommendations]
+      summary: List optimization recommendations
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: priority
+          in: query
+          schema:
+            type: ["string", "null"]
+      responses:
+        "200":
+          description: List of recommendations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Recommendation"
+
+  /recommendations/{id}/apply:
+    post:
+      operationId: applyRecommendation
+      tags: [recommendations]
+      summary: Apply an optimization recommendation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Recommendation"
+
+  /recommendations/{id}/dismiss:
+    post:
+      operationId: dismissRecommendation
+      tags: [recommendations]
+      summary: Dismiss a recommendation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Dismissed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Recommendation"
+
+  /alerts:
+    get:
+      operationId: listAlerts
+      tags: [alerts]
+      summary: List cost alerts
+      parameters:
+        - name: severity
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: resolved
+          in: query
+          schema:
+            type: ["boolean", "null"]
+      responses:
+        "200":
+          description: List of alerts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CostAlert"
+
+  /alerts/{id}/resolve:
+    post:
+      operationId: resolveAlert
+      tags: [alerts]
+      summary: Resolve an alert
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CostAlert"
+
+  /forecasts:
+    get:
+      operationId: listForecasts
+      tags: [forecasts]
+      summary: Get cost forecasts
+      parameters:
+        - name: accountId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: days
+          in: query
+          schema:
+            type: ["integer", "null"]
+      responses:
+        "200":
+          description: Cost forecasts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CostForecast"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary with totals and breakdowns
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/spending-by-service:
+    get:
+      operationId: getSpendingByService
+      tags: [dashboard]
+      summary: Get cost breakdown by service type
+      responses:
+        "200":
+          description: Spending by service
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServiceSpend"
+
+  /dashboard/spending-by-provider:
+    get:
+      operationId: getSpendingByProvider
+      tags: [dashboard]
+      summary: Get cost breakdown by cloud provider
+      responses:
+        "200":
+          description: Spending by provider
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProviderSpend"
+
+  /dashboard/cost-trend:
+    get:
+      operationId: getCostTrend
+      tags: [dashboard]
+      summary: Get daily cost trend for the past 30 days
+      responses:
+        "200":
+          description: Daily cost trend
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DailyCost"
+
+  /dashboard/top-costly-resources:
+    get:
+      operationId: getTopCostlyResources
+      tags: [dashboard]
+      summary: Get top 10 most expensive resources
+      responses:
+        "200":
+          description: Top costly resources
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CloudResource"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +386,200 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    CloudAccount:
+      type: object
+      required: [id, provider, name, accountId, region, status, monthlyCost, createdAt]
+      properties:
+        id:
+          type: integer
+        provider:
+          type: string
+          description: "aws | gcp | azure"
+        name:
+          type: string
+        accountId:
+          type: string
+        region:
+          type: string
+        status:
+          type: string
+          description: "active | inactive"
+        monthlyCost:
+          type: number
+        createdAt:
+          type: string
+
+    CloudAccountInput:
+      type: object
+      required: [provider, name, accountId, region]
+      properties:
+        provider:
+          type: string
+        name:
+          type: string
+        accountId:
+          type: string
+        region:
+          type: string
+
+    CloudResource:
+      type: object
+      required: [id, accountId, provider, resourceType, name, region, status, monthlyCost, cpuUtilization, memoryUtilization, lastActive, tags]
+      properties:
+        id:
+          type: integer
+        accountId:
+          type: integer
+        provider:
+          type: string
+        resourceType:
+          type: string
+          description: "ec2 | rds | s3 | lambda | gce | gcs | bigquery | vm | blob_storage | aks"
+        name:
+          type: string
+        region:
+          type: string
+        status:
+          type: string
+          description: "active | idle | unused | stopped"
+        monthlyCost:
+          type: number
+        cpuUtilization:
+          type: number
+        memoryUtilization:
+          type: number
+        lastActive:
+          type: string
+        tags:
+          type: string
+
+    CloudResourceUpdate:
+      type: object
+      properties:
+        status:
+          type: ["string", "null"]
+        tags:
+          type: ["string", "null"]
+
+    Recommendation:
+      type: object
+      required: [id, resourceId, resourceName, provider, recommendationType, description, estimatedMonthlySavings, priority, status, createdAt]
+      properties:
+        id:
+          type: integer
+        resourceId:
+          type: integer
+        resourceName:
+          type: string
+        provider:
+          type: string
+        recommendationType:
+          type: string
+          description: "shutdown | resize_down | delete | schedule | reserved_instance | spot_instance"
+        description:
+          type: string
+        estimatedMonthlySavings:
+          type: number
+        priority:
+          type: string
+          description: "critical | high | medium | low"
+        status:
+          type: string
+          description: "pending | applied | dismissed"
+        createdAt:
+          type: string
+
+    CostAlert:
+      type: object
+      required: [id, severity, title, message, estimatedImpact, resolved, createdAt]
+      properties:
+        id:
+          type: integer
+        severity:
+          type: string
+          description: "critical | warning | info"
+        title:
+          type: string
+        message:
+          type: string
+        estimatedImpact:
+          type: number
+        resolved:
+          type: boolean
+        createdAt:
+          type: string
+
+    CostForecast:
+      type: object
+      required: [id, accountId, forecastDate, predictedCost, confidenceLow, confidenceHigh]
+      properties:
+        id:
+          type: integer
+        accountId:
+          type: ["integer", "null"]
+        forecastDate:
+          type: string
+        predictedCost:
+          type: number
+        confidenceLow:
+          type: number
+        confidenceHigh:
+          type: number
+
+    DashboardSummary:
+      type: object
+      required: [totalMonthlyCost, projectedMonthCost, potentialMonthlySavings, totalResources, idleResources, unusedResources, activeAlerts, pendingRecommendations, costChangePercent]
+      properties:
+        totalMonthlyCost:
+          type: number
+        projectedMonthCost:
+          type: number
+        potentialMonthlySavings:
+          type: number
+        totalResources:
+          type: integer
+        idleResources:
+          type: integer
+        unusedResources:
+          type: integer
+        activeAlerts:
+          type: integer
+        pendingRecommendations:
+          type: integer
+        costChangePercent:
+          type: number
+
+    ServiceSpend:
+      type: object
+      required: [service, monthlyCost, percentage]
+      properties:
+        service:
+          type: string
+        monthlyCost:
+          type: number
+        percentage:
+          type: number
+
+    ProviderSpend:
+      type: object
+      required: [provider, monthlyCost, percentage, resourceCount]
+      properties:
+        provider:
+          type: string
+        monthlyCost:
+          type: number
+        percentage:
+          type: number
+        resourceCount:
+          type: integer
+
+    DailyCost:
+      type: object
+      required: [date, cost]
+      properties:
+        date:
+          type: string
+        cost:
+          type: number
